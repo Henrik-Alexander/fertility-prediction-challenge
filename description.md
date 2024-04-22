@@ -1,3 +1,5 @@
 # Description of submission
+This directory contains the files for the first submission by [Henrik-Alexander Schubert](mailto::schubert@demogr.mpg.de).
 
-This is the first test of the github-submission process. 
+
+# The model
