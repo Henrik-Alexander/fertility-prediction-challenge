@@ -16,6 +16,9 @@
 # List your packages here. Don't forget to update packages.R!
 library(tidyverse) # as an example, not used here
 library(data.table)
+library(randomForest)
+library(caret)
+library(glmnet)
 
 # Load the data
 path_data <- "U:/data/nld/liss/"
@@ -44,19 +47,6 @@ clean_df <- function(df, background_df = NULL){
   df$age <- 2024 - df$birthyear_bg
   df$partnership_duration <- 2024 - df$cf20m028
   
-  # Selecting variables for modelling
-  newvars <- c("partnership", "fertility_intentions", "cohabitation", "marriage", "nchild", "parent")
-  oldvars <- c("cf20m024", "cf20c129", "cf20m025", "cf20m030", "cf14g036", "cf14g035")
-  
-  # Rename variables
-  df <- setnames(df, old = oldvars, new = newvars)
-  
-  keepcols <- c('nomem_encr', # ID variable required for predictions,
-                'age',  # Age of the respondent
-                "new_child", # Childbirth
-                "partnership_duration", # Duration of the ongoing partnership
-                newvars)        # All the other variables
-  
   # Function to select the most recent income information
   select_most_recent <- function(data = df, varname = "^brutohh_f_"){
     if (!any(str_detect(names(data), varname))) stop("Could not find a variable!")
@@ -76,7 +66,24 @@ clean_df <- function(df, background_df = NULL){
   }
   
   # Clean the variables
-  select_most_recent(data = df, varname = "^brutohh_f")
+  df$income <- select_most_recent(data = df, varname = "^brutohh_f")
+  df$education <- select_most_recent(data = df, varname = "oplmet")
+  
+  # Selecting variables for modelling
+  newvars <- c("partnership", "fertility_intentions", "cohabitation", "marriage", "nchild", "parent")
+  oldvars <- c("cf20m024", "cf20m129", "cf20m025", "cf20m030", "cf14g036", "cf14g035")
+  
+  # Rename variables
+  df <- setnames(df, old = oldvars, new = newvars)
+  
+  keepcols <- c('nomem_encr', # ID variable required for predictions,
+                'age',  # Age of the respondent
+                "new_child", # Childbirth
+                "partnership_duration", # Duration of the ongoing partnership
+                "education", # Income data
+                newvars)        # All the other variables
+  
+  keepcols <- keepcols[keepcols != "fertility_intentions"]
   
   ## Keeping data with variables selected
   df <- df[, ..keepcols]
@@ -95,13 +102,42 @@ clean_df <- function(df, background_df = NULL){
   df$marriage[df$partnership == 2] <- 0
   
   # Remove all the missing variables
-  na.omit(df)
+  df <- na.omit(df)
   
   return(df)
 }
 
 # Predict the outcomes
 df <- clean_df(df)
+
+# Select test data
+n <- nrow(df)
+selector <- sample(1:n, size = n * 0.8, replace = F)
+train <- df[selector, ]
+test <- df[!(1:n %in% selector), ]
+
+# Make a logistic regression
+log1 <- glm(new_child ~ ., data = train, family = "binomial")
+test$pred_log <- ifelse(predict(log1, test, type = "response") > 0.5, 1, 0)
+mean(test$pred_log == test$new_child, na.rm = T)
+
+# Make an elastic net regression
+cv_5 = trainControl(method = "cv", number = 5)
+train$new_child <- factor(train$new_child)
+hit_elnet = train(
+  new_child ~ ., data = train,
+  method = "glmnet",
+  trControl = cv_5
+)
+test$pred_elnet <- predict(hit_elnet, test)
+mean(test$pred_elnet == test$new_child, na.rm = T)
+
+
+# Random forest
+rf1 <- randomForest(y = factor(train$new_child), x = train[, !(names(train) %in% "new_child")], ytest = factor(test$new_child), yxtest = test)
+test$pred_forest <- predict(rf1, test)
+mean(test$pred_forest == test$new_child)
+
 
 predict_outcomes <- function(df, background_df = NULL, model_path = "./model.rds"){
   # Generate predictions using the saved model and the input dataframe.
