@@ -297,23 +297,17 @@ overflow-y: auto;
 border: 1px solid #ddd;
 border-radius: 4px;
 }
-.tabset-dropdown > .nav-tabs > li.active:before {
-content: "";
+.tabset-dropdown > .nav-tabs > li.active:before, .tabset-dropdown > .nav-tabs.nav-tabs-open:before {
+content: "\e259";
 font-family: 'Glyphicons Halflings';
 display: inline-block;
 padding: 10px;
 border-right: 1px solid #ddd;
 }
 .tabset-dropdown > .nav-tabs.nav-tabs-open > li.active:before {
-content: "";
-border: none;
-}
-.tabset-dropdown > .nav-tabs.nav-tabs-open:before {
-content: "";
+content: "\e258";
 font-family: 'Glyphicons Halflings';
-display: inline-block;
-padding: 10px;
-border-right: 1px solid #ddd;
+border: none;
 }
 .tabset-dropdown > .nav-tabs > li.active {
 display: block;
@@ -360,11 +354,16 @@ display: none;
 
 <div id="description-of-submission" class="section level1">
 <h1>Description of submission</h1>
-<p>This directory contains the files for the first submission by (<a href="mailto::schubert@demogr.mpg.de">Henrik-Alexander
-Schubert</a>).</p>
+<p>This directory contains the files for the first submission by <a href="mailto::schubert@demogr.mpg.de">Henrik-Alexander Schubert</a>.</p>
 </div>
 <div id="the-model" class="section level1">
 <h1>The model</h1>
+<p>The final model is a random forest with 5-fold cross-validation. The
+predictor variables are age, the partnership duration, education
+irrespective of degree, education measured by highest degree,
+cohabitation, marriage, personal income, migration background, urban
+classification of settlement, dwelling type, number of children, whether
+the person is parent.</p>
 </div>
 
 

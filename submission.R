@@ -19,16 +19,12 @@ library(data.table)
 library(randomForest)
 library(caret)
 library(glmnet)
+library(RRF)
+library(kernlab)
+library(nnet)
+library(LiblineaR)
 
-# Load the data
-path_data <- "U:/data/nld/liss/"
-df <- fread(paste0(path_data, "training_data/PreFer_train_data.csv"))
-out <- fread(paste0(path_data, "training_data/PreFer_train_outcome.csv"))
-cb <- fread(paste0(path_data, "/codebooks/PreFer_codebook.csv"))
-
-# Filter respondents that have the outcome
-df <- df[outcome_available == 1, ]
-df <- merge(df, out, by = "nomem_encr", all.x = T) 
+# source("load_data.R")
 
 clean_df <- function(df, background_df = NULL){
   # Preprocess the input dataframe to feed the model.
@@ -67,11 +63,17 @@ clean_df <- function(df, background_df = NULL){
   
   # Clean the variables
   df$income <- select_most_recent(data = df, varname = "^brutohh_f")
-  df$education <- select_most_recent(data = df, varname = "oplmet")
+  df$education <- select_most_recent(data = df, varname = "oplcat")
+  df$settlement <- select_most_recent(data = df, varname = "sted_")
+  df$dwelling <- select_most_recent(data = df, varname = "woning")
+  df$degree <- select_most_recent(data = df, varname = "oplmet")
+  df$fertility_intentions <- select_most_recent(data = df, varname = "^cf[0-9]{2}[a-m]129$")
+  #df$hh_children <- select_most_recent(data = df, varname = "aantalki")
+  df$sex <- df$gender_bg
   
   # Selecting variables for modelling
-  newvars <- c("partnership", "fertility_intentions", "cohabitation", "marriage", "nchild", "parent")
-  oldvars <- c("cf20m024", "cf20m129", "cf20m025", "cf20m030", "cf14g036", "cf14g035")
+  newvars <- c("partnership", "cohabitation", "marriage", "nchild", "parent")
+  oldvars <- c("cf20m024", "cf20m025", "cf20m030", "cf14g036", "cf14g035" )
   
   # Rename variables
   df <- setnames(df, old = oldvars, new = newvars)
@@ -79,11 +81,16 @@ clean_df <- function(df, background_df = NULL){
   keepcols <- c('nomem_encr', # ID variable required for predictions,
                 'age',  # Age of the respondent
                 "new_child", # Childbirth
+               # "hh_children", # Children living in the household
+               #"fertility_intentions", # How many children do you think you will have
                 "partnership_duration", # Duration of the ongoing partnership
-                "education", # Income data
+                "education", # Education
+                "degree", # Educational degree
+                "settlement", # Settlement type
+                "sex", # Sex
+                "migration_background_bg", # Migration background
+                "dwelling", # Type of the dwelling
                 newvars)        # All the other variables
-  
-  keepcols <- keepcols[keepcols != "fertility_intentions"]
   
   ## Keeping data with variables selected
   df <- df[, ..keepcols]
@@ -98,8 +105,8 @@ clean_df <- function(df, background_df = NULL){
   df$partnership_duration[df$partnership == 2 | is.na(df$partnership)] <- 0
   df$nchild[is.na(df$parent)] <- 0
   df$parent[df$nchild == 0 & is.na(df$parent)] <- 0
-  df$cohabitation[df$partnership == 2] <- 0
-  df$marriage[df$partnership == 2] <- 0
+  df$cohabitation[df$partnership == 2 | is.na(df$cohabitation)] <- 0
+  df$marriage[df$partnership == 2 | is.na(df$marriage)] <- 0
   
   # Remove all the missing variables
   df <- na.omit(df)
@@ -110,34 +117,9 @@ clean_df <- function(df, background_df = NULL){
 # Predict the outcomes
 df <- clean_df(df)
 
-# Select test data
-n <- nrow(df)
-selector <- sample(1:n, size = n * 0.8, replace = F)
-train <- df[selector, ]
-test <- df[!(1:n %in% selector), ]
-
-# Make a logistic regression
-log1 <- glm(new_child ~ ., data = train, family = "binomial")
-test$pred_log <- ifelse(predict(log1, test, type = "response") > 0.5, 1, 0)
-mean(test$pred_log == test$new_child, na.rm = T)
-
-# Make an elastic net regression
-cv_5 = trainControl(method = "cv", number = 5)
-train$new_child <- factor(train$new_child)
-hit_elnet = train(
-  new_child ~ ., data = train,
-  method = "glmnet",
-  trControl = cv_5
-)
-test$pred_elnet <- predict(hit_elnet, test)
-mean(test$pred_elnet == test$new_child, na.rm = T)
 
 
-# Random forest
-rf1 <- randomForest(y = factor(train$new_child), x = train[, !(names(train) %in% "new_child")], ytest = factor(test$new_child), yxtest = test)
-test$pred_forest <- predict(rf1, test)
-mean(test$pred_forest == test$new_child)
-
+## Make predictions -----------------------------------
 
 predict_outcomes <- function(df, background_df = NULL, model_path = "./model.rds"){
   # Generate predictions using the saved model and the input dataframe.
