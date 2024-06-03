@@ -19,9 +19,9 @@ train_save_model <- function(cleaned_df, outcome_df) {
   # Combine cleaned_df and outcome_df
   model_df <- merge(cleaned_df, outcome_df, by = "nomem_encr")
   
-  # Logistic regression model
-  model <- glm(new_child ~ age, family = "binomial", data = model_df)
+  # Random forest
+  mod_rrf = train(new_child ~ ., data = model_df, method = "RRFglobal", trControl =  trainControl(method = "cv", number = 5))
   
   # Save the model
-  saveRDS(model, "model.rds")
+  saveRDS(mod_rrf, "model.rds")
 }
